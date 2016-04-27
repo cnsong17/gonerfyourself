@@ -1,6 +1,7 @@
 #include <StepperControl.h>
 #include <Pixy.h>
 #include <SPI.h>
+#include <AccelStepper.h>
 
 //Declare pin functions on Arduino
 #define stp 2
@@ -11,20 +12,22 @@
 #define EN  7
 
 //Declare variables for functions
-#define X_CENTER        ((PIXY_MAX_X-PIXY_MIN_X)/2)       
-#define Y_CENTER        ((PIXY_MAX_Y-PIXY_MIN_Y)/2)
-#define k_p             .01
-char user_input;
-int x;
-int y;
-int state;
-int numSteps;
+#define X_CENTER        ((PIXY_MAX_X-PIXY_MIN_X)/2) // x-coord center of frame
+#define Y_CENTER        ((PIXY_MAX_Y-PIXY_MIN_Y)/2) // y-coord center of frame
+#define k_p             3.2 // proportional gain
+#define k_i             1 // integral gain
+
+// global variables
+int x; // x-coordinate
+int y; // y-coordinate
+double prev_servoVal; // the previous servo value
 
 // declare stepper and pixy objects
-StepperControl stepper(stp, dir, MS1, MS2, MS3, EN);
-Pixy pixy;
+StepperControl stpr(stp, dir, MS1, MS2, MS3, EN); //used to set the size of the steps that we want
+AccelStepper stepper(1, stp, dir); //used to control the speed of the stepper motor
+Pixy pixy; // instance of pixy
 
-// setup pan and tilt servo loops
+// setup pan and tilt servo loops (this is from the pixy examples)
 class ServoLoop
 {
 public:
@@ -39,7 +42,7 @@ public:
 };
 
 ServoLoop panLoop(300, 500);
-ServoLoop tiltLoop(500, 700);
+ServoLoop tiltLoop(500 ,700); // 500, 700 // 40,700
 
 ServoLoop::ServoLoop(int32_t pgain, int32_t dgain)
 {
@@ -67,63 +70,56 @@ void ServoLoop::update(int32_t error)
   m_prevError = error;
 }
 
+
 // convert the servo value to the corresponding stepper input
 int servoToStepper(int servoVal)
 {
-  double error = servoVal - 500;
-  numSteps = (int) k_p*error;   
-
+  int rpm = (int) k_p*servoVal + k_i*prev_servoVal;   
+  
+  if(servoVal < 10 && servoVal > -10){
+    stepper.setSpeed(0);
+    stepper.runSpeed();
+  } 
+  
   // set direction of the stepper 
-  if (error > 0)
+  else if (servoVal > 0)
   {
     digitalWrite(dir, LOW); //Pull direction pin low to move "forward"
-    digitalWrite(EN, LOW); //Pull enable pin low to set FETs active and allow motor control
-    stepper.EigthSteps(24);
-    stepper.resetBEDPins();
-    Serial.println(error);
+    stepper.setSpeed(-rpm);
+    stepper.runSpeed();
   }
   else 
-  { 
-    //error = -error;
+  {
     digitalWrite(dir, HIGH); //Pull direction pin low to move "forward"
-    digitalWrite(EN, LOW); //Pull enable pin low to set FETs active and allow motor control
-    stepper.EigthSteps(24);
-    stepper.resetBEDPins();
-    Serial.println(error);
+    stepper.setSpeed(-rpm);
+    stepper.runSpeed();
   }
 
-  
-  return numSteps;
+  prev_servoVal = servoVal;
 }
 
 void setup() {
-  stepper.resetBEDPins(); //Set step, direction, microstep and enable pins to default states
-  Serial.begin(9600); //Open Serial connection for debugging
-  Serial.println("Begin motor control");
-  Serial.println();
-  //Print function list for user selection
-  Serial.println("Enter number for control option:");
-  Serial.println("1. One revolution in quarterstep mode.");
-  Serial.println();
-
-  // initialize pixy
-  pixy.init();
+  digitalWrite(EN, LOW); //Pull enable pin low to set FETs active and allow motor control
+  Serial.begin(115200); //Open Serial connection for debugging
+  pixy.init(); // initialize pixy
+  stpr.HalfSteps(20); //make the steps quarter steps
+  stepper.setMaxSpeed(1000); //set the maximum speed - Speeds of more than 1000 steps per second are unreliable. 
 }
 
 void loop() {
   //pixy control
   static int i = 0;
-  int j, stepperVal;
   uint16_t blocks;
-  char buf[32]; 
+  char buf[32];
   int32_t panError, tiltError;
 
-  i++;
   blocks = pixy.getBlocks();
   if (blocks)
     i++;
-  
-  if (i%20 == 0)
+
+  // i%5 slows it down, also need to include blocks
+  //if (blocks && i%5 == 0) // this mod changes the rate at which the servos are updated
+  if (blocks)
   {
     panError = X_CENTER-pixy.blocks[0].x;
     tiltError = pixy.blocks[0].y-Y_CENTER;
@@ -133,50 +129,11 @@ void loop() {
     
     pixy.setServos(panLoop.m_pos, tiltLoop.m_pos);
     
-    //i++;
+  }
 
-    servoToStepper(panLoop.m_pos);
-    
-    
-    
-    // do this (print) every 50 frames because printing every
-    // frame would bog down the Arduino
-    /*if (i%50==0) 
-    {
-      sprintf(buf, "servoVal %d:\t", panLoop.m_pos);
-      Serial.print(buf);
-    }
-
-    // get pan servo value and convert to stepper value
-    stepperVal = servoToStepper(panLoop.m_pos);
-    digitalWrite(EN, LOW); //Pull enable pin low to set FETs active and allow motor control
-  stepper.QuarterSteps(4);
-  stepper.resetBEDPins();
-
-    if (i%50==0) 
-    {
-      sprintf(buf, "stepperVal %d:\n", stepperVal);
-      Serial.print(buf);
-    }*/
-  }  
-
-  // stepper control
-  /*digitalWrite(EN, LOW); //Pull enable pin low to set FETs active and allow motor control
-    stepper.QuarterSteps(0);
-    stepper.resetBEDPins();
-*/
-  /*while(Serial.available()){
-      user_input = Serial.read(); //Read user input and trigger appropriate function
-
-      digitalWrite(EN, LOW); //Pull enable pin low to set FETs active and allow motor control
-      if (user_input =='1')
-      {
-         stepper.QuarterSteps(1600);
-      }
-      else
-      {
-        Serial.println("Invalid option entered.");
-      }
-      stepper.resetBEDPins();
-  }*/
+  //if (i%10 == 0) 
+  {// this mod changes the rate at which the servos are updated
+    servoToStepper(X_CENTER-pixy.blocks[0].x);
+    i = 0;
+  }
 }
