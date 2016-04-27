@@ -30,9 +30,9 @@ void StepperControl::step(int numSteps)
   for(int x = 1; x < numSteps; x++)  //Loop the forward stepping enough times for motion to be visible
   {
     digitalWrite(_step,HIGH); //Trigger one step forward
-    delay(1);
+    delay(6);
     digitalWrite(_step,LOW); //Pull step pin low so it can be triggered again
-    delay(1);
+    delay(5);
   }
 }
 
