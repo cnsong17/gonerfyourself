@@ -1,4 +1,4 @@
-#include <StepperControl.h>
+#include "StepperControl.h"
 #include <Pixy.h>
 #include <SPI.h>
 #include <AccelStepper.h>
@@ -14,8 +14,9 @@
 //Declare variables for functions
 #define X_CENTER        ((PIXY_MAX_X-PIXY_MIN_X)/2) // x-coord center of frame
 #define Y_CENTER        ((PIXY_MAX_Y-PIXY_MIN_Y)/2) // y-coord center of frame
-#define k_p             3.2 // proportional gain
+#define k_p             10 // proportional gain // 3.2 //5.2 //5.5 //12
 #define k_i             1 // integral gain
+#define k_d             5 // differential gain
 
 // global variables
 int x; // x-coordinate
@@ -42,7 +43,7 @@ public:
 };
 
 ServoLoop panLoop(300, 500);
-ServoLoop tiltLoop(500 ,700); // 500, 700 // 40,700
+ServoLoop tiltLoop(500 ,700); // 40,700
 
 ServoLoop::ServoLoop(int32_t pgain, int32_t dgain)
 {
@@ -74,35 +75,30 @@ void ServoLoop::update(int32_t error)
 // convert the servo value to the corresponding stepper input
 int servoToStepper(int servoVal)
 {
-  int rpm = (int) k_p*servoVal + k_i*prev_servoVal;   
-  
-  if(servoVal < 10 && servoVal > -10){
-    stepper.setSpeed(0);
-    stepper.runSpeed();
-  } 
+  // PID loop for stepper motor
+  int rpm = (int) k_p*servoVal + k_d*(servoVal - prev_servoVal);
+  prev_servoVal = servoVal;
   
   // set direction of the stepper 
-  else if (servoVal > 0)
+ if (servoVal > 0)
   {
-    digitalWrite(dir, LOW); //Pull direction pin low to move "forward"
+    digitalWrite(dir, LOW); //Pull direction pin low to move "forward" 
     stepper.setSpeed(-rpm);
     stepper.runSpeed();
   }
   else 
   {
-    digitalWrite(dir, HIGH); //Pull direction pin low to move "forward"
+    digitalWrite(dir, HIGH); //Pull direction pin low to move "forward" 
     stepper.setSpeed(-rpm);
     stepper.runSpeed();
   }
-
-  prev_servoVal = servoVal;
 }
 
 void setup() {
   digitalWrite(EN, LOW); //Pull enable pin low to set FETs active and allow motor control
   Serial.begin(115200); //Open Serial connection for debugging
   pixy.init(); // initialize pixy
-  stpr.HalfSteps(20); //make the steps quarter steps
+  stpr.QuarterSteps(1); //make the steps quarter steps
   stepper.setMaxSpeed(1000); //set the maximum speed - Speeds of more than 1000 steps per second are unreliable. 
 }
 
@@ -110,12 +106,15 @@ void loop() {
   //pixy control
   static int i = 0;
   uint16_t blocks;
-  char buf[32];
+  //char buf[32];
   int32_t panError, tiltError;
+  //const int sampleRate = 5;
+  
 
   blocks = pixy.getBlocks();
-  if (blocks)
-    i++;
+//  if (blocks)
+//    i++;
+  i++;
 
   // i%5 slows it down, also need to include blocks
   //if (blocks && i%5 == 0) // this mod changes the rate at which the servos are updated
@@ -131,7 +130,7 @@ void loop() {
     
   }
 
-  //if (i%10 == 0) 
+  //if (i%sampleRate == 0)  // we might want this if it becomes too jittery
   {// this mod changes the rate at which the servos are updated
     servoToStepper(X_CENTER-pixy.blocks[0].x);
     i = 0;
