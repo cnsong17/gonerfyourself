@@ -14,14 +14,13 @@
 //Declare variables for functions
 #define X_CENTER        ((PIXY_MAX_X-PIXY_MIN_X)/2) // x-coord center of frame
 #define Y_CENTER        ((PIXY_MAX_Y-PIXY_MIN_Y)/2) // y-coord center of frame
-#define k_p             10 // proportional gain // 3.2 //5.2 //5.5 //12
-#define k_i             1 // integral gain
-#define k_d             5 // differential gain
+#define k_p             25 // proportional gain // 20 //25
+#define k_d             2.5 // differential gain //2 //2.5
 
 // global variables
 int x; // x-coordinate
 int y; // y-coordinate
-double prev_servoVal; // the previous servo value
+int prev_X;; // the previous servo value
 
 // declare stepper and pixy objects
 StepperControl stpr(stp, dir, MS1, MS2, MS3, EN); //used to set the size of the steps that we want
@@ -75,30 +74,37 @@ void ServoLoop::update(int32_t error)
 // convert the servo value to the corresponding stepper input
 int servoToStepper(int servoVal)
 {
+  int deriv_term = pixy.blocks[0].x - prev_X;
+  int servoVal_P = X_CENTER-pixy.blocks[0].x;
+  int servoVal_D = X_CENTER-deriv_term;
+  
   // PID loop for stepper motor
-  int rpm = (int) k_p*servoVal + k_d*(servoVal - prev_servoVal);
-  prev_servoVal = servoVal;
+  int rpm = (int) k_p*servoVal_P + k_d*servoVal_D;
+  prev_X = pixy.blocks[0].x;
+
+  stepper.setSpeed(-rpm);
+  stepper.runSpeed();
   
   // set direction of the stepper 
- if (servoVal > 0)
-  {
-    digitalWrite(dir, LOW); //Pull direction pin low to move "forward" 
-    stepper.setSpeed(-rpm);
-    stepper.runSpeed();
-  }
-  else 
-  {
-    digitalWrite(dir, HIGH); //Pull direction pin low to move "forward" 
-    stepper.setSpeed(-rpm);
-    stepper.runSpeed();
-  }
+// if (servoVal > 0)
+//  {
+//    digitalWrite(dir, HIGH); //Pull direction pin low to move "forward" 
+//    stepper.setSpeed(rpm);
+//    stepper.runSpeed();
+//  }
+//  else 
+//  {
+//    digitalWrite(dir, LOW); //Pull direction pin low to move "forward" 
+//    stepper.setSpeed(-rpm);
+//    stepper.runSpeed();
+//  }
 }
 
 void setup() {
   digitalWrite(EN, LOW); //Pull enable pin low to set FETs active and allow motor control
   Serial.begin(115200); //Open Serial connection for debugging
   pixy.init(); // initialize pixy
-  stpr.QuarterSteps(1); //make the steps quarter steps
+  stpr.EigthSteps(1); //make the steps quarter steps
   stepper.setMaxSpeed(1000); //set the maximum speed - Speeds of more than 1000 steps per second are unreliable. 
 }
 
@@ -108,31 +114,30 @@ void loop() {
   uint16_t blocks;
   //char buf[32];
   int32_t panError, tiltError;
-  //const int sampleRate = 5;
+  const int sampleRate = 5;
   
 
   blocks = pixy.getBlocks();
 //  if (blocks)
 //    i++;
-  i++;
+//  i++;
 
   // i%5 slows it down, also need to include blocks
   //if (blocks && i%5 == 0) // this mod changes the rate at which the servos are updated
   if (blocks)
   {
-    panError = X_CENTER-pixy.blocks[0].x;
+    //panError = X_CENTER-pixy.blocks[0].x;
     tiltError = pixy.blocks[0].y-Y_CENTER;
     
-    panLoop.update(panError);
+    //panLoop.update(panError);
     tiltLoop.update(tiltError);
     
     pixy.setServos(panLoop.m_pos, tiltLoop.m_pos);
-    
   }
 
-  //if (i%sampleRate == 0)  // we might want this if it becomes too jittery
-  {// this mod changes the rate at which the servos are updated
-    servoToStepper(X_CENTER-pixy.blocks[0].x);
-    i = 0;
-  }
+//  if (i%sampleRate == 0)  // we might want this if it becomes too jittery
+//  {// this mod changes the rate at which the servos are updated
+    servoToStepper(pixy.blocks[0].x);
+//    i = 0;
+//  }
 }
