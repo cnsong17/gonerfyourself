@@ -1,4 +1,4 @@
-#include "StepperControl.h"
+ #include "StepperControl.h"
 #include <Pixy.h>
 #include <SPI.h>
 #include <AccelStepper.h>
@@ -13,6 +13,7 @@
 
 //Declare pin functions for laser
 #define LASER 53
+#define RELAY 47
 
 //Declare variables for functions
 #define X_CENTER        ((PIXY_MAX_X-PIXY_MIN_X)/2) // x-coord center of frame
@@ -93,14 +94,19 @@ void servoToStepper(int blocks_X)
 // find the peak of the trajectory
 void findPeakOfFlight(int blocks_Y) {
   int deriv_Threshold = 0; //the derivative threshold
+  int relayThreshold = 500; // the threshold for the trigger
   
   //find when the derivative is equal to or less than zero
   int deriv_term = Y_CENTER - blocks_Y;
-  if(deriv_term <= deriv_Threshold) { 
+  if(deriv_term <= deriv_Threshold && tiltLoop.m_pos <= relayThreshold) { 
     digitalWrite(LASER,HIGH);
+    digitalWrite(RELAY,HIGH);
   }
-  else
+  else 
+  {
     digitalWrite(LASER,LOW);
+    digitalWrite(RELAY,LOW );
+  }
     
 }  
 
@@ -111,7 +117,32 @@ void setup() {
   stpr.EigthSteps(1); //make the steps quarter steps
   stepper.setMaxSpeed(1000); //set the maximum speed - Speeds of more than 1000 steps per second are unreliable. 
   pinMode(LASER, OUTPUT); // laser output pin
+  pinMode(RELAY, OUTPUT); // relay output pin
   digitalWrite(LASER,LOW); //initialize laser to low
+  digitalWrite(RELAY,LOW); //initialize relay to low
+
+  // find pin with high voltage output
+//  pinMode(49, OUTPUT);
+//  pinMode(47, OUTPUT);
+//  pinMode(45, OUTPUT);
+//  pinMode(43, OUTPUT);
+//  pinMode(41, OUTPUT);
+//  pinMode(39, OUTPUT);
+//  pinMode(37, OUTPUT);
+//  pinMode(35, OUTPUT);
+//  pinMode(33, OUTPUT);
+//  pinMode(31, OUTPUT);
+//  
+//  digitalWrite(49, HIGH);
+//  digitalWrite(47, HIGH);
+//  digitalWrite(45, HIGH);
+//  digitalWrite(43, HIGH);
+//  digitalWrite(41, HIGH);
+//  digitalWrite(39, HIGH); 
+//  digitalWrite(37, HIGH);
+//  digitalWrite(35, HIGH);
+//  digitalWrite(33, HIGH);
+//  digitalWrite(31, HIGH);
 }
 
 void loop() {
@@ -137,6 +168,7 @@ void loop() {
     
     //panLoop.update(panError);
     tiltLoop.update(tiltError);
+    //Serial.println(tiltLoop.m_pos);
     
     pixy.setServos(panLoop.m_pos, tiltLoop.m_pos);
   }
