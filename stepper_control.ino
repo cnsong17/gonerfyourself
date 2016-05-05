@@ -18,8 +18,8 @@
 //Declare variables for functions
 #define X_CENTER        ((PIXY_MAX_X-PIXY_MIN_X)/2) // x-coord center of frame
 #define Y_CENTER        ((PIXY_MAX_Y-PIXY_MIN_Y)/2) // y-coord center of frame
-#define k_p             25 // proportional gain // 20 //25
-#define k_d             3 // differential gain //2 //2.5
+#define k_p             14 // proportional gain // 20 //25 
+#define k_d             1 // differential gain //2 //2.5 //3
 
 // global variables
 int x; // x-coordinate
@@ -87,7 +87,11 @@ void servoToStepper(int blocks_X)
   int rpm = (int) k_p*servoVal_P + k_d*servoVal_D;
   prev_X = blocks_X;
 
+//  if(rpm < 1000){
   stepper.setSpeed(-rpm);
+//  }
+//  else stepper.setSpeed(1000);
+//  Serial.println(-rpm);
   stepper.runSpeed();
 }
 
@@ -98,14 +102,15 @@ void findPeakOfFlight(int blocks_Y) {
   
   //find when the derivative is equal to or less than zero
   int deriv_term = Y_CENTER - blocks_Y;
-  if(deriv_term <= deriv_Threshold && tiltLoop.m_pos <= relayThreshold) { 
-    digitalWrite(LASER,HIGH);
+  if (deriv_term <= deriv_Threshold && tiltLoop.m_pos <= relayThreshold) { 
     digitalWrite(RELAY,HIGH);
   }
-  else 
-  {
-    digitalWrite(LASER,LOW);
-    digitalWrite(RELAY,LOW );
+  if (tiltLoop.m_pos >= relayThreshold){
+    digitalWrite(RELAY,LOW);
+    digitalWrite(LASER, LOW);
+  }
+  else {
+    digitalWrite(LASER,HIGH);
   }
     
 }  
